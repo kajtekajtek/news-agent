@@ -1,7 +1,7 @@
 import aws_cdk as core
 import aws_cdk.assertions as assertions
 
-from news_agent.news_agent_stack import NewsAgentStack
+from infra.news_agent_stack import NewsAgentStack
 
 # example tests. To run these tests, uncomment this file along with the example
 # resource in news_agent/news_agent_stack.py
