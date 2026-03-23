@@ -1,0 +1,7 @@
+{
+  "feeds": [
+    "https://www.bankier.pl/rss/wiadomosci.xml",
+    "https://hnrss.org/frontpage",
+    "https://feeds.bbci.co.uk/news/world/rss.xml"
+  ]
+}
