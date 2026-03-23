@@ -3,7 +3,7 @@ import os
 
 import aws_cdk as cdk
 
-from news_agent.news_agent_stack import NewsAgentStack
+from infra.news_agent_stack import NewsAgentStack
 
 
 app = cdk.App()
