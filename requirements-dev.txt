@@ -2,3 +2,5 @@ pytest==8.4.2
 moto[ssm,ses]
 responses
 pytest-mock
+feedparser
+requests
