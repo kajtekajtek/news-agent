@@ -128,7 +128,7 @@ def handler(
             region_name=region_name,
             model_id=model_id,
         )
-        logger.debug("invoke_model returned (length=%s)", len(summary))
+        logger.debug("invoke_model returned: %s", summary)
     except BedrockThrottlingError:
         logger.warning("Bedrock throttled")
         return _json_response(
