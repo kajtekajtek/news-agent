@@ -82,25 +82,6 @@ def _is_openai_bedrock_model(model_id: str) -> bool:
     return model_id.startswith("openai.")
 
 
-def _anthropic_messages_body(
-    *,
-    system_prompt: str,
-    user_text: str,
-    max_tokens: int,
-) -> dict[str, Any]:
-    return {
-        "anthropic_version": ANTHROPIC_VERSION,
-        "max_tokens": max_tokens,
-        "system": system_prompt,
-        "messages": [
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": user_text}],
-            }
-        ],
-    }
-
-
 def _openai_chat_completion_body(
     *,
     model_id: str,
@@ -120,17 +101,6 @@ def _openai_chat_completion_body(
     }
 
 
-def _extract_anthropic_messages_text(body: dict[str, Any]) -> str:
-    content = body.get("content")
-    if isinstance(content, list) and content:
-        block = content[0]
-        if isinstance(block, dict) and "text" in block:
-            return str(block["text"])
-    if isinstance(content, str):
-        return content
-    return ""
-
-
 def _extract_openai_chat_completion_text(body: dict[str, Any]) -> str:
     choices = body.get("choices")
     if isinstance(choices, list) and choices:
@@ -139,4 +109,34 @@ def _extract_openai_chat_completion_text(body: dict[str, Any]) -> str:
             text = message.get("content")
             if isinstance(text, str):
                 return text
+    return ""
+
+
+def _anthropic_messages_body(
+    *,
+    system_prompt: str,
+    user_text: str,
+    max_tokens: int,
+) -> dict[str, Any]:
+    return {
+        "anthropic_version": ANTHROPIC_VERSION,
+        "max_tokens": max_tokens,
+        "system": system_prompt,
+        "messages": [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": user_text}],
+            }
+        ],
+    }
+
+
+def _extract_anthropic_messages_text(body: dict[str, Any]) -> str:
+    content = body.get("content")
+    if isinstance(content, list) and content:
+        block = content[0]
+        if isinstance(block, dict) and "text" in block:
+            return str(block["text"])
+    if isinstance(content, str):
+        return content
     return ""
