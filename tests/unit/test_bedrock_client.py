@@ -11,12 +11,12 @@ from bedrock_client import (
     CLAUDE_3_HAIKU_MODEL_ID,
     OPENAI_GPT_OSS_20B_MODEL_ID,
     BedrockThrottlingError,
-    summarize_articles,
+    invoke_model,
 )
 
 
 @patch("bedrock_client.boto3.client")
-def test_summarize_sends_prompt_and_returns_text(mock_boto_client):
+def test_invoke_model_sends_prompt_and_returns_text(mock_boto_client):
     mock_runtime = MagicMock()
     mock_boto_client.return_value = mock_runtime
     response_body = {
@@ -28,7 +28,7 @@ def test_summarize_sends_prompt_and_returns_text(mock_boto_client):
 
     articles = "Headline A\nHeadline B"
     system = "You are a newsletter bot."
-    result = summarize_articles(articles, system, region_name="us-east-1")
+    result = invoke_model(user_text=articles, system_prompt=system, region_name="us-east-1")
 
     mock_boto_client.assert_called_once_with("bedrock-runtime", region_name="us-east-1")
     mock_runtime.invoke_model.assert_called_once()
@@ -41,7 +41,7 @@ def test_summarize_sends_prompt_and_returns_text(mock_boto_client):
 
 
 @patch("bedrock_client.boto3.client")
-def test_summarize_openai_chat_completions_format(mock_boto_client):
+def test_invoke_model_openai_chat_completions_format(mock_boto_client):
     mock_runtime = MagicMock()
     mock_boto_client.return_value = mock_runtime
     response_body = {
@@ -51,9 +51,9 @@ def test_summarize_openai_chat_completions_format(mock_boto_client):
         "body": io.BytesIO(json.dumps(response_body).encode("utf-8")),
     }
 
-    result = summarize_articles(
-        "article text",
-        "system instructions",
+    result = invoke_model(
+        user_text="article text",
+        system_prompt="system instructions",
         region_name="eu-north-1",
         model_id=OPENAI_GPT_OSS_20B_MODEL_ID,
     )
@@ -76,4 +76,18 @@ def test_throttling_raises_bedrock_throttling_error(mock_boto_client):
     mock_runtime.invoke_model.side_effect = ClientError(error_response, "InvokeModel")
 
     with pytest.raises(BedrockThrottlingError):
-        summarize_articles("x", "y")
+        invoke_model(user_text="x", system_prompt="y")
+
+
+@patch("bedrock_client.boto3.client")
+def test_unknown_model_id_raises_value_error(mock_boto_client):
+    mock_boto_client.return_value = MagicMock()
+
+    with pytest.raises(ValueError, match="Unsupported Bedrock model_id"):
+        invoke_model(
+            user_text="x",
+            system_prompt="y",
+            model_id="totally.unknown-model-id:0",
+        )
+
+    mock_boto_client.return_value.invoke_model.assert_not_called()

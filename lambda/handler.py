@@ -7,7 +7,7 @@ import logging
 import os
 from typing import Any
 
-from bedrock_client import BedrockThrottlingError, CLAUDE_3_HAIKU_MODEL_ID, summarize_articles
+from bedrock_client import BedrockThrottlingError, CLAUDE_3_HAIKU_MODEL_ID, invoke_model
 from models import RssItem
 from rss_fetcher import fetch_recent_articles
 
@@ -55,6 +55,7 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
             400,
             {"error": "FEEDS_JSON is missing or empty"},
         )
+    logger.debug("Feeds loaded from %s: %s", ENV_FEEDS_JSON, feeds)
 
     system_prompt = _load_system_prompt()
     if not system_prompt:
@@ -74,15 +75,18 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
             200,
             {"message": "No recent articles", "hours": hours, "articles": 0},
         )
+    logger.debug("Articles fetched: %s", items)
 
     articles_text = _articles_to_prompt_text(items)
     try:
-        summary = summarize_articles(
-            articles_text,
-            system_prompt,
+        logger.debug("Calling invoke_model with parameters: \nuser_text=%s, \nsystem_prompt=%s, \nregion_name=%s, \nmodel_id=%s", articles_text, system_prompt, region_name, model_id)
+        summary = invoke_model(
+            user_text=articles_text,
+            system_prompt=system_prompt,
             region_name=region_name,
             model_id=model_id,
         )
+        logger.debug("invoke_model returned: %s", summary)
     except BedrockThrottlingError:
         logger.warning("Bedrock throttled")
         return _json_response(

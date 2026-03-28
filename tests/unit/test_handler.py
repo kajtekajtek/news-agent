@@ -27,7 +27,7 @@ def env_feeds_and_prompt(monkeypatch):
     monkeypatch.setenv(ENV_SYSTEM_PROMPT, "You summarize RSS.")
 
 
-@patch("handler.summarize_articles")
+@patch("handler.invoke_model")
 @patch("handler.fetch_recent_articles")
 def test_handler_returns_summary(mock_fetch, mock_summarize, env_feeds_and_prompt, monkeypatch):
     monkeypatch.setenv(ENV_AWS_REGION, "eu-central-1")
@@ -50,11 +50,11 @@ def test_handler_returns_summary(mock_fetch, mock_summarize, env_feeds_and_promp
     assert body["hours"] == 12
     mock_fetch.assert_called_once()
     mock_summarize.assert_called_once()
-    assert mock_summarize.call_args[0][1] == "You summarize RSS."
-    assert mock_summarize.call_args[1].get("region_name") == "eu-central-1"
+    assert mock_summarize.call_args.kwargs["system_prompt"] == "You summarize RSS."
+    assert mock_summarize.call_args.kwargs.get("region_name") == "eu-central-1"
 
 
-@patch("handler.summarize_articles")
+@patch("handler.invoke_model")
 @patch("handler.fetch_recent_articles")
 def test_handler_passes_bedrock_model_id_from_env(
     mock_fetch, mock_summarize, env_feeds_and_prompt, monkeypatch,

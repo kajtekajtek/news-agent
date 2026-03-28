@@ -6,6 +6,8 @@ Does not run under pytest. Usage from repository root::
 
     ./tests/run_handler_local.py
     ./tests/run_handler_local.py --hours 12
+    ./tests/run_handler_local.py --debug
+    ./tests/run_handler_local.py --debug /tmp/handler.log
 
 Requires network for RSS (and AWS credentials for Bedrock when summarizing).
 
@@ -17,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -28,6 +31,7 @@ _CONFIG = _REPO_ROOT / "config"
 if str(_LAMBDA) not in sys.path:
     sys.path.insert(0, str(_LAMBDA))
 
+_LOG_FORMAT = "%(levelname)s %(name)s %(message)s"
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Invoke handler.handler locally.")
@@ -37,7 +41,21 @@ def main() -> int:
         default=None,
         help="RSS lookback window (passed as event['hours']).",
     )
+    parser.add_argument(
+        "--debug",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="FILE",
+        help=(
+            "Enable DEBUG logging: with no FILE, log to stderr; with FILE, append logs to that path."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.debug is not None:
+        log_path = None if args.debug == "" else Path(args.debug)
+        _configure_debug_logging(log_file=log_path)
 
     _load_default_env()
 
@@ -52,6 +70,23 @@ def main() -> int:
     print(json.dumps(pretty, indent=2, ensure_ascii=False))
     return 0
 
+def _configure_debug_logging(*, log_file: Path | None) -> None:
+    """Attach one DEBUG handler: stderr if ``log_file`` is None, else that file (UTF-8)."""
+    fmt = logging.Formatter(_LOG_FORMAT)
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    if log_file is None:
+        sh = logging.StreamHandler()
+        sh.setLevel(logging.DEBUG)
+        sh.setFormatter(fmt)
+        root.addHandler(sh)
+    else:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
 
 def _load_default_env() -> None:
     """Fill missing handler env vars from ``config/`` files."""
