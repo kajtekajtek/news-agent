@@ -30,17 +30,19 @@ pytest
 ./tests/run_handler_local.py
 ./tests/run_handler_local.py --hours 12
 ./tests/run_handler_local.py --debug
+./tests/run_handler_local.py --no-email
 ```
 
-If `FEEDS_JSON` / `SYSTEM_PROMPT` aren’t set, the script fills them from `config/` when those files exist. Requires valid AWS credentials.
+If `FEEDS_JSON` / `SYSTEM_PROMPT` aren’t set, the script looks for them from `config/`. The handler expects **verified SES sender and recipient** in the environment / SSM; use **`--no-email`** to skip SES.
+
+Requires valid AWS credentials set.
 
 ### Deploy the stack
 
-Set NEWS_AGENT_{SENDER/RECIPIENT}_EMAIL with verified SES address emails for your AWS account.
+Set NEWS_AGENT_{SENDER/RECIPIENT}_EMAIL with verified SES address emails for your AWS account. You can use `.env.example` to fill in your values.
 
 ```bash
-export NEWS_AGENT_SENDER_EMAIL='verified-sender@example.com'
-export NEWS_AGENT_RECIPIENT_EMAIL='verified-recipient@example.com'
+source .env
 cdk deploy
 ```
 
