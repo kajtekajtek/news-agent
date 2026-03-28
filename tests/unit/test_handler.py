@@ -9,6 +9,8 @@ from handler import (
     ENV_AWS_REGION,
     ENV_BEDROCK_MODEL_ID,
     ENV_FEEDS_JSON,
+    ENV_NEWSLETTER_RECIPIENT_EMAIL,
+    ENV_NEWSLETTER_SENDER_EMAIL,
     ENV_SYSTEM_PROMPT,
     handler,
 )
@@ -48,6 +50,7 @@ def test_handler_returns_summary(mock_fetch, mock_summarize, env_feeds_and_promp
     assert body["summary"] == "Daily digest."
     assert body["articles"] == 1
     assert body["hours"] == 12
+    assert body.get("email_sent") is False
     mock_fetch.assert_called_once()
     mock_summarize.assert_called_once()
     assert mock_summarize.call_args.kwargs["system_prompt"] == "You summarize RSS."
@@ -97,3 +100,54 @@ def test_handler_missing_system_prompt(env_feeds_and_prompt, monkeypatch):
     out = handler({}, None)
 
     assert out["statusCode"] == 400
+
+
+@patch("handler.send_summary_email")
+@patch("handler.invoke_model")
+@patch("handler.fetch_recent_articles")
+def test_handler_sends_email_when_sender_and_recipient_set(
+    mock_fetch, mock_summarize, mock_send_email, env_feeds_and_prompt, monkeypatch,
+):
+    monkeypatch.setenv(ENV_NEWSLETTER_SENDER_EMAIL, "from@example.com")
+    monkeypatch.setenv(ENV_NEWSLETTER_RECIPIENT_EMAIL, "to@example.com")
+    mock_fetch.return_value = [
+        {"title": "T", "link": "https://x", "published": "p", "summary": "S"},
+    ]
+    mock_summarize.return_value = "Summary text."
+    mock_send_email.return_value = "msg-123"
+
+    out = handler({}, None)
+
+    assert out["statusCode"] == 200
+    body = json.loads(out["body"])
+    assert body["email_sent"] is True
+    assert body["message_id"] == "msg-123"
+    mock_send_email.assert_called_once()
+    call_kw = mock_send_email.call_args.kwargs
+    assert call_kw["sender"] == "from@example.com"
+    assert call_kw["recipient"] == "to@example.com"
+    assert call_kw["summary_text"] == "Summary text."
+
+
+@patch("handler.send_summary_email")
+@patch("handler.invoke_model")
+@patch("handler.fetch_recent_articles")
+def test_handler_returns_502_when_ses_rejects(
+    mock_fetch, mock_summarize, mock_send_email, env_feeds_and_prompt, monkeypatch,
+):
+    from ses_sender import SesEmailRejectedError
+
+    monkeypatch.setenv(ENV_NEWSLETTER_SENDER_EMAIL, "from@example.com")
+    monkeypatch.setenv(ENV_NEWSLETTER_RECIPIENT_EMAIL, "to@example.com")
+    mock_fetch.return_value = [
+        {"title": "T", "link": "https://x", "published": "p", "summary": "S"},
+    ]
+    mock_summarize.return_value = "Summary text."
+    mock_send_email.side_effect = SesEmailRejectedError("sandbox")
+
+    out = handler({}, None)
+
+    assert out["statusCode"] == 502
+    body = json.loads(out["body"])
+    assert body["error"] == "SES rejected email"
+    assert "summary" in body
