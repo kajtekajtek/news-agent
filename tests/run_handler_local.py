@@ -8,6 +8,7 @@ Does not run under pytest. Usage from repository root::
     ./tests/run_handler_local.py --hours 12
     ./tests/run_handler_local.py --debug
     ./tests/run_handler_local.py --debug /tmp/handler.log
+    ./tests/run_handler_local.py --no-email
 
 Requires network for RSS (and AWS credentials for Bedrock when summarizing).
 
@@ -51,6 +52,11 @@ def main() -> int:
             "Enable DEBUG logging: with no FILE, log to stderr; with FILE, append logs to that path."
         ),
     )
+    parser.add_argument(
+        "--no-email",
+        action="store_true",
+        help="Call handler with skip_email=True (no SES; avoids requiring sender/recipient env).",
+    )
     args = parser.parse_args()
 
     if args.debug is not None:
@@ -65,7 +71,7 @@ def main() -> int:
     if args.hours is not None:
         event["hours"] = args.hours
 
-    result = handler(event, None)
+    result = handler(event, None, skip_email=args.no_email)
     pretty = _pretty_payload(result)
     print(json.dumps(pretty, indent=2, ensure_ascii=False))
     return 0

@@ -102,8 +102,8 @@ class NewsAgentStack(Stack):
             environment={
                 "FEEDS_SSM_PARAM": feeds_param.parameter_name,
                 "SYSTEM_PROMPT_SSM_PARAM": prompt_param.parameter_name,
-                "NEWSLETTER_SENDER_SSM_PARAM": sender_param.parameter_name,
-                "NEWSLETTER_RECIPIENT_SSM_PARAM": recipient_param.parameter_name,
+                "NEWS_AGENT_SENDER_SSM_PARAM": sender_param.parameter_name,
+                "NEWS_AGENT_RECIPIENT_SSM_PARAM": recipient_param.parameter_name,
             },
         )
 

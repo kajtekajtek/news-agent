@@ -1,4 +1,4 @@
-"""Lambda entrypoint: RSS fetch + Bedrock summarization + optional SES email."""
+"""Lambda entrypoint: RSS fetch + Bedrock summarization + SES newsletter email."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from ses_sender import SesEmailRejectedError, send_summary_email
 logger = logging.getLogger(__name__)
 
 DEFAULT_HOURS = 24
-DEFAULT_NEWSLETTER_SUBJECT = "Daily newsletter"
+DEFAULT_NEWS_AGENT_SUBJECT = "Daily newsletter"
 
 # Environment variable names (Lambda / deployment configuration)
 ENV_FEEDS_JSON = "FEEDS_JSON"
@@ -29,19 +29,24 @@ ENV_BEDROCK_MODEL_ID = "BEDROCK_MODEL_ID"
 # Optional: load config from SSM at runtime (names only; IAM must allow ssm:GetParameter)
 ENV_FEEDS_SSM_PARAM = "FEEDS_SSM_PARAM"
 ENV_SYSTEM_PROMPT_SSM_PARAM = "SYSTEM_PROMPT_SSM_PARAM"
-# SES (optional — if sender and recipient are set, email is sent after summarization)
-ENV_NEWSLETTER_SENDER_EMAIL = "NEWSLETTER_SENDER_EMAIL"
-ENV_NEWSLETTER_RECIPIENT_EMAIL = "NEWSLETTER_RECIPIENT_EMAIL"
-ENV_NEWSLETTER_SENDER_SSM_PARAM = "NEWSLETTER_SENDER_SSM_PARAM"
-ENV_NEWSLETTER_RECIPIENT_SSM_PARAM = "NEWSLETTER_RECIPIENT_SSM_PARAM"
-ENV_NEWSLETTER_SUBJECT = "NEWSLETTER_SUBJECT"
+# SES newsletter
+ENV_NEWS_AGENT_SENDER_EMAIL = "NEWS_AGENT_SENDER_EMAIL"
+ENV_NEWS_AGENT_RECIPIENT_EMAIL = "NEWS_AGENT_RECIPIENT_EMAIL"
+ENV_NEWS_AGENT_SENDER_SSM_PARAM = "NEWS_AGENT_SENDER_SSM_PARAM"
+ENV_NEWS_AGENT_RECIPIENT_SSM_PARAM = "NEWS_AGENT_RECIPIENT_SSM_PARAM"
+ENV_NEWS_AGENT_SUBJECT = "NEWS_AGENT_SUBJECT"
 ENV_SES_REGION = "SES_REGION"
 
 
-def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
+def handler(
+    event: dict[str, Any] | None,
+    context: Any,
+    *,
+    skip_email: bool = False,
+) -> dict[str, Any]:
     """
     Fetch recent RSS items, concatenate them into a prompt, summarize via Bedrock,
-    and optionally send the summary by email (SES).
+    and sends the summary by email (SES), unless ``skip_email`` is True.
 
     Environment:
 
@@ -49,9 +54,9 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
     - ``FEEDS_SSM_PARAM``: optional SSM parameter name (e.g. ``/news-agent/feeds``) whose value is the same JSON as ``FEEDS_JSON``. Used when ``FEEDS_JSON`` is empty.
     - ``SYSTEM_PROMPT``: system instructions (unless ``SYSTEM_PROMPT_SSM_PARAM`` is set and env is empty).
     - ``SYSTEM_PROMPT_SSM_PARAM``: optional SSM parameter for the system prompt string.
-    - ``NEWSLETTER_SENDER_EMAIL`` / ``NEWSLETTER_RECIPIENT_EMAIL``: if both resolve non-empty, summary is emailed via SES.
-    - ``NEWSLETTER_SENDER_SSM_PARAM`` / ``NEWSLETTER_RECIPIENT_SSM_PARAM``: optional SSM parameter **names** used when the direct env vars are empty (runtime lookup).
-    - ``NEWSLETTER_SUBJECT``: optional email subject (default: "Daily newsletter").
+    - ``NEWS_AGENT_SENDER_EMAIL`` / ``NEWS_AGENT_RECIPIENT_EMAIL``: required unless ``skip_email`` is true; SES From/To (or use ``*_SSM_PARAM`` for runtime SSM values).
+    - ``NEWS_AGENT_SENDER_SSM_PARAM`` / ``NEWS_AGENT_RECIPIENT_SSM_PARAM``: SSM parameter **names** when the direct env vars are empty.
+    - ``NEWS_AGENT_SUBJECT``: optional email subject (default: "Daily newsletter").
     - ``SES_REGION``: optional SES region (defaults to ``AWS_REGION``).
     - ``BEDROCK_REGION`` (optional): Bedrock region; defaults to ``AWS_REGION``.
     - ``BEDROCK_MODEL_ID`` (optional): Bedrock model or inference profile id.
@@ -84,6 +89,19 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
             400,
             {"error": "SYSTEM_PROMPT is not set"},
         )
+
+    if not skip_email:
+        if not _load_newsletter_sender_email() or not _load_newsletter_recipient_email():
+            logger.warning("Newsletter sender or recipient not configured")
+            return _json_response(
+                400,
+                {
+                    "error": (
+                        "NEWS_AGENT_SENDER_EMAIL and NEWS_AGENT_RECIPIENT_EMAIL (or SSM param names "
+                        "and values) must be set, or invoke with skip_email=True for local runs"
+                    ),
+                },
+            )
 
     region_name = os.environ.get(ENV_BEDROCK_REGION) or os.environ.get(ENV_AWS_REGION)
     model_id = (os.environ.get(ENV_BEDROCK_MODEL_ID) or "").strip() or CLAUDE_3_HAIKU_MODEL_ID
@@ -125,31 +143,34 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
         "email_sent": False,
     }
 
+    if skip_email:
+        payload["email_skipped"] = True
+        return _json_response(200, payload)
+
     sender = _load_newsletter_sender_email()
     recipient = _load_newsletter_recipient_email()
-    if sender and recipient:
-        subject = _load_newsletter_subject()
-        ses_region = _ses_region()
-        try:
-            message_id = send_summary_email(
-                sender=sender,
-                recipient=recipient,
-                subject=subject,
-                summary_text=summary,
-                region_name=ses_region,
-            )
-            payload["email_sent"] = True
-            payload["message_id"] = message_id
-        except SesEmailRejectedError as exc:
-            logger.warning("SES rejected email: %s", exc)
-            return _json_response(
-                502,
-                {
-                    "error": "SES rejected email",
-                    "articles": len(items),
-                    "summary": summary,
-                },
-            )
+    subject = _load_newsletter_subject()
+    ses_region = _ses_region()
+    try:
+        message_id = send_summary_email(
+            sender=sender,
+            recipient=recipient,
+            subject=subject,
+            summary_text=summary,
+            region_name=ses_region,
+        )
+        payload["email_sent"] = True
+        payload["message_id"] = message_id
+    except SesEmailRejectedError as exc:
+        logger.warning("SES rejected email: %s", exc)
+        return _json_response(
+            502,
+            {
+                "error": "SES rejected email",
+                "articles": len(items),
+                "summary": summary,
+            },
+        )
 
     return _json_response(200, payload)
 
@@ -206,28 +227,28 @@ def _load_system_prompt() -> str:
 
 
 def _load_newsletter_sender_email() -> str:
-    direct = os.environ.get(ENV_NEWSLETTER_SENDER_EMAIL, "").strip()
+    direct = os.environ.get(ENV_NEWS_AGENT_SENDER_EMAIL, "").strip()
     if direct:
         return direct
-    ssm_name = os.environ.get(ENV_NEWSLETTER_SENDER_SSM_PARAM, "").strip()
+    ssm_name = os.environ.get(ENV_NEWS_AGENT_SENDER_SSM_PARAM, "").strip()
     if ssm_name:
         return _get_ssm_parameter(ssm_name)
     return ""
 
 
 def _load_newsletter_recipient_email() -> str:
-    direct = os.environ.get(ENV_NEWSLETTER_RECIPIENT_EMAIL, "").strip()
+    direct = os.environ.get(ENV_NEWS_AGENT_RECIPIENT_EMAIL, "").strip()
     if direct:
         return direct
-    ssm_name = os.environ.get(ENV_NEWSLETTER_RECIPIENT_SSM_PARAM, "").strip()
+    ssm_name = os.environ.get(ENV_NEWS_AGENT_RECIPIENT_SSM_PARAM, "").strip()
     if ssm_name:
         return _get_ssm_parameter(ssm_name)
     return ""
 
 
 def _load_newsletter_subject() -> str:
-    subject = os.environ.get(ENV_NEWSLETTER_SUBJECT, DEFAULT_NEWSLETTER_SUBJECT).strip()
-    return subject or DEFAULT_NEWSLETTER_SUBJECT
+    subject = os.environ.get(ENV_NEWS_AGENT_SUBJECT, DEFAULT_NEWS_AGENT_SUBJECT).strip()
+    return subject or DEFAULT_NEWS_AGENT_SUBJECT
 
 
 def _ses_region() -> str | None:
