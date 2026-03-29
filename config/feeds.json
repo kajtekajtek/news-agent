@@ -1,7 +1,23 @@
 {
   "feeds": [
-    "https://www.bankier.pl/rss/wiadomosci.xml",
+    "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "https://www.politico.eu/feed/rss",
+    "https://www.aljazeera.com/xml/rss/all.xml",
+    "https://spectrum.ieee.org/customfeeds/feed/all-topics/rss",
+    "https://www.wired.com/feed/rss",
     "https://hnrss.org/frontpage",
-    "https://feeds.bbci.co.uk/news/world/rss.xml"
+    "https://swistak.codes/rss-all/feed.xml",
+    "https://nfsec.pl/feed/",
+    "https://www.ciemnastrona.com.pl/feed.xml",
+    "https://steipete.me/rss.xml",
+    "https://www.money.pl/rss/",
+    "https://www.bankier.pl/rss/wiadomosci.xml",
+    "https://www.bankier.pl/rss/gielda.xml",
+    "https://strefainwestorow.pl/rss.xml",
+    "https://strefainwestorow.pl/strefa-global-market/rss.xml",
+    "https://makroekonomia.mbank.pl/rss",
+    "http://klubjagiellonski.pl/rss",
+    "http://unherd.com/rss",
+    "https://synopsa.pl/feed/"
   ]
 }
