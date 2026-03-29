@@ -3,4 +3,5 @@ moto[ssm,ses]
 responses
 pytest-mock
 feedparser
+markdown>=3.5
 requests

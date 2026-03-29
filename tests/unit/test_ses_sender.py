@@ -9,11 +9,16 @@ from moto import mock_aws
 from ses_sender import SesEmailRejectedError, send_summary_email, summary_to_html
 
 
-def test_summary_to_html_escapes_and_wraps():
-    html_out = summary_to_html("<script>alert(1)</script>\nLine")
-    assert "&lt;script&gt;" in html_out
+def test_summary_to_html_renders_markdown_and_strips_script():
+    html_out = summary_to_html("<script>alert(1)</script>\n**Bold** and a line.")
     assert "<script>" not in html_out
-    assert "white-space:pre-wrap" in html_out
+    assert "<strong>Bold</strong>" in html_out
+    assert "max-width:40em" in html_out
+
+
+def test_summary_to_html_empty():
+    assert "<body>" in summary_to_html("")
+    assert summary_to_html("   ").count("<div") >= 1
 
 
 @mock_aws

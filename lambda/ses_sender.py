@@ -2,30 +2,28 @@
 
 from __future__ import annotations
 
-import html
 import logging
+import re
 from typing import Any
-
 import boto3
+import markdown
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
-
 class SesEmailRejectedError(Exception):
     """Raised when SES rejects the message (e.g. unverified identity in sandbox)."""
 
+_MARKDOWN_EXTENSIONS = ("fenced_code", "sane_lists", "nl2br", "tables")
 
-def summary_to_html(summary_text: str) -> str:
-    """Wrap plain / markdown-like summary in a minimal HTML body (escaped)."""
-    escaped = html.escape(summary_text.strip(), quote=True)
-    return (
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\" /></head>"
-        "<body style=\"font-family:system-ui,Segoe UI,sans-serif;line-height:1.5\">"
-        f"<div style=\"white-space:pre-wrap\">{escaped}</div>"
-        "</body></html>"
-    )
-
+# Stdlib-only mitigation: Python-Markdown passes through raw HTML; email clients may execute scripts.
+_DANGEROUS_HTML = (
+    r"(?is)<script\b[^>]*>.*?</script>",
+    r"(?is)<script\b[^>]*/>",
+    r"(?is)<iframe\b[^>]*>.*?</iframe>",
+    r"(?is)<object\b[^>]*>.*?</object>",
+    r"(?is)<embed\b[^>]*/?>",
+)
 
 def send_summary_email(
     *,
@@ -71,3 +69,31 @@ def send_summary_email(
     message_id = response.get("MessageId", "")
     logger.info("SES send_email MessageId=%s", message_id)
     return str(message_id)
+
+def summary_to_html(summary_text: str) -> str:
+    """Render Markdown ``summary_text`` into a minimal HTML email document."""
+    inner = _convert_markdown_to_html(summary_text)
+    wrapped = (
+        f'<div style="max-width:40em;font-family:system-ui,Segoe UI,sans-serif;'
+        f'line-height:1.5">{inner}</div>'
+    )
+    return (
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\" /></head>"
+        f"<body>{wrapped}</body></html>"
+    )
+
+def _convert_markdown_to_html(summary_text: str) -> str:
+    text = summary_text.strip()
+    if not text:
+        return ""
+    fragment = markdown.markdown(
+        text,
+        extensions=list(_MARKDOWN_EXTENSIONS),
+    )
+    return _strip_dangerous_html(fragment)
+
+def _strip_dangerous_html(fragment: str) -> str:
+    out = fragment
+    for pattern in _DANGEROUS_HTML:
+        out = re.sub(pattern, "", out)
+    return out

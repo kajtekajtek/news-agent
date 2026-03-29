@@ -1,6 +1,12 @@
 # news-agent
 
-Scheduled AWS Lambda function that turns RSS feeds into a personal newsletter.
+RSS-sourced newsletter ready to deploy on AWS.
+
+**How it works:**
+1. ⏰ **Scheduled** via Amazon EventBridge (CloudWatch)
+2. 📰 **Lambda fetches** and parses articles from configured RSS feeds
+3. 🤖 **Feeds are summarized** using a Bedrock language model
+4. 📧 **Personalized newsletter** is sent with Amazon SES
 
 ## Installation
 
@@ -13,8 +19,7 @@ pip install -r requirements-dev.txt
 
 ### Requirements
 
-- [CDK CLI](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html) 
-- Docker (for `cdk deploy`)
+- [Amazon CDK CLI](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html) 
 
 ## Usage
 
@@ -38,13 +43,8 @@ pytest
 
 ### Run the Lambda locally
 
-Requires AWS credentials configured in the environment.
-
 ```bash
 ./tests/run_handler_local.py
-./tests/run_handler_local.py --hours 12
-./tests/run_handler_local.py --debug
-./tests/run_handler_local.py --no-email
 ```
 
 ### Deploy the stack
@@ -52,6 +52,7 @@ Requires AWS credentials configured in the environment.
 ```bash
 export NEWS_AGENT_SENDER_EMAIL='verified-sender@example.com'
 export NEWS_AGENT_RECIPIENT_EMAIL='verified-recipient@example.com'
+cdk bootstrap
 cdk deploy
 ```
 
