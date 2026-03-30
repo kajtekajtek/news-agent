@@ -3,27 +3,17 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
+
 import boto3
-import markdown
 from botocore.exceptions import ClientError
+
+from html_utils import markdown_to_safe_html_fragment
 
 logger = logging.getLogger(__name__)
 
 class SesEmailRejectedError(Exception):
     """Raised when SES rejects the message (e.g. unverified identity in sandbox)."""
-
-_MARKDOWN_EXTENSIONS = ("fenced_code", "sane_lists", "nl2br", "tables")
-
-# Stdlib-only mitigation: Python-Markdown passes through raw HTML; email clients may execute scripts.
-_DANGEROUS_HTML = (
-    r"(?is)<script\b[^>]*>.*?</script>",
-    r"(?is)<script\b[^>]*/>",
-    r"(?is)<iframe\b[^>]*>.*?</iframe>",
-    r"(?is)<object\b[^>]*>.*?</object>",
-    r"(?is)<embed\b[^>]*/?>",
-)
 
 def send_summary_email(
     *,
@@ -72,7 +62,7 @@ def send_summary_email(
 
 def summary_to_html(summary_text: str) -> str:
     """Render Markdown ``summary_text`` into a minimal HTML email document."""
-    inner = _convert_markdown_to_html(summary_text)
+    inner = markdown_to_safe_html_fragment(summary_text)
     wrapped = (
         f'<div style="max-width:40em;font-family:system-ui,Segoe UI,sans-serif;'
         f'line-height:1.5">{inner}</div>'
@@ -81,19 +71,3 @@ def summary_to_html(summary_text: str) -> str:
         "<!DOCTYPE html><html><head><meta charset=\"utf-8\" /></head>"
         f"<body>{wrapped}</body></html>"
     )
-
-def _convert_markdown_to_html(summary_text: str) -> str:
-    text = summary_text.strip()
-    if not text:
-        return ""
-    fragment = markdown.markdown(
-        text,
-        extensions=list(_MARKDOWN_EXTENSIONS),
-    )
-    return _strip_dangerous_html(fragment)
-
-def _strip_dangerous_html(fragment: str) -> str:
-    out = fragment
-    for pattern in _DANGEROUS_HTML:
-        out = re.sub(pattern, "", out)
-    return out

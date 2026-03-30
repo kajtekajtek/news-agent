@@ -7,7 +7,11 @@ import logging
 import feedparser
 import requests
 
+from html_utils import strip_html_to_plain
+
 logger = logging.getLogger(__name__)
+
+_SUMMARY_MAX_CHARS = 800
 
 def fetch_recent_articles(
     feeds: list[str],
@@ -62,7 +66,8 @@ def _parse_entry(entry: Any, cutoff: datetime) -> RssItem | None:
         return None
     title = getattr(entry, "title", "") or ""
     link = getattr(entry, "link", "") or ""
-    summary = getattr(entry, "summary", None) or getattr(entry, "description", "") or ""
+    raw_summary = getattr(entry, "summary", None) or getattr(entry, "description", "") or ""
+    summary = strip_html_to_plain(raw_summary, max_chars=_SUMMARY_MAX_CHARS)
     return RssItem(title=title, link=link, published=pub.isoformat(), summary=summary)
 
 
